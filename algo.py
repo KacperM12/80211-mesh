@@ -1,6 +1,9 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import math
+import json 
+import math
+
 
 class Node:
     def __init__(self, node_id, x, y, uplink_bw=0):
@@ -172,36 +175,84 @@ def visualize_network(nodes, edges_config, title="Topologia Sieci Mesh"):
     print("\nZamykam okno wykresu, aby zakończyć program.")
     plt.show()
 
-# --- URUCHOMIENIE SYMULACJI ---
+
+def auto_generate_edges(nodes, max_range_meters=100):
+    """
+    Automatycznie generuje połączenia mesh między węzłami, 
+    które znajdują się w swoim zasięgu fizycznym.
+    """
+    edges_config = []
+    node_keys = list(nodes.keys())
+    
+    # Sprawdzamy każdą możliwą parę węzłów
+    for i in range(len(node_keys)):
+        for j in range(i + 1, len(node_keys)):
+            n1 = nodes[node_keys[i]]
+            n2 = nodes[node_keys[j]]
+            
+            # Obliczanie dystansu euklidesowego
+            distance = math.sqrt((n1.x - n2.x)**2 + (n1.y - n2.y)**2)
+            
+            # jeśli są w zasięgu, tworzymy link
+            if distance <= max_range_meters:
+                # Opcjonalnie: Przepustowość spada wraz z odległością
+                # Np. blisko = 50 Mbps, na skraju zasięgu = 5 Mbps
+                if distance < max_range_meters / 2:
+                    bandwidth = 50
+                else:
+                    bandwidth = 10
+                    
+                edges_config.append((n1.node_id, n2.node_id, bandwidth))
+                
+    return edges_config
+
+
+def load_topology_from_json(filepath):
+    """Wczytuje węzły i krawędzie z pliku JSON."""
+    with open(filepath, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+        
+    nodes = {}
+    edges_config = []
+    
+    # tworzenie obiektów Node na podstawie JSON
+    for n in data.get('nodes', []):
+        nodes[n['id']] = Node(n['id'], x=n['x'], y=n['y'], uplink_bw=n['uplink_bw'])
+        
+    # pobieranie definicji krawędzi
+    for e in data.get('edges', []):
+        edges_config.append((e['u'], e['v'], e['bw']))
+        
+    return nodes, edges_config
+
+# uruchonmienie symulacji
 if __name__ == "__main__":
-    # 1. Definiujemy urządzenia ze współrzędnymi (x, y) w metrach
-    nodes = {
-        'N1': Node('N1', x=0, y=100, uplink_bw=100),   # Baza
-        'N2': Node('N2', x=50, y=100, uplink_bw=5),    # Bramka ze słabym LTE (N2 z przykładu)
-        'N3': Node('N3', x=50, y=50, uplink_bw=0),
-        'N4': Node('N4', x=0, y=0, uplink_bw=0),
-        'N5': Node('N5', x=-30, y=60, uplink_bw=0)
-    }
     
-    # 2. Definiujemy możliwe fizyczne połączenia Mesh (WLAN) w Mbps
-    # W Twojej pracy te wartości mogłyby wynikać z funkcji calculate_distance
-    edges_config = [
-        ('N1', 'N2', 50), # Świetne połączenie Mesh
-        ('N2', 'N3', 30),
-        ('N3', 'N4', 20),
-        ('N1', 'N5', 10), # Słabe połączenie Mesh
-        ('N5', 'N4', 40),
-        ('N1', 'N3', 5)   # Bardzo słabe, ale możliwe
-    ]
+    # 1. Wczytujemy dane z pliku
+    config_file = 'topology.json'
+    print(f"Wczytywanie węzłów z pliku: {config_file}...")
     
-    # Dodajemy sąsiadów do obiektów Node
+    try:
+        # Pobieramy węzły, ale ignorujemy krawędzie z jsona (używając znaku '_')
+        nodes, _ = load_topology_from_json(config_file)
+    except FileNotFoundError:
+        print(f"Błąd: Nie znaleziono pliku {config_file}!")
+        exit()
+        
+    # 2. AUTOMATYCZNE GENEROWANIE POŁĄCZEŃ
+    # Definiujemy fizyczny zasięg radia w metrach (np. 80 metrów)
+    zasieg_wifi = 80
+    print(f"Obliczanie zasięgu fizycznego urządzeń (max {zasieg_wifi}m)...")
+    edges_config = auto_generate_edges(nodes, max_range_meters=zasieg_wifi)
+        
+    # 3. Dodajemy sąsiadów do obiektów Node na podstawie wyliczonych odległości
     for u, v, bw in edges_config:
         if u in nodes and v in nodes:
             nodes[u].add_neighbor(v, bw)
             nodes[v].add_neighbor(u, bw)
         
-    # 3. Uruchamiamy algorytm
+    # 4. Uruchamiamy algorytm routingu
     run_mesh_routing_algorithm(nodes)
     
-    # 4. Wizualizacja
-    visualize_network(nodes, edges_config, "Wizualizacja Routingu Mesh (Dijkstra Cost)")
+    # 5. Wizualizacja
+    visualize_network(nodes, edges_config, f"Wizualizacja Zasięgu Mesh (Max {zasieg_wifi}m)")
