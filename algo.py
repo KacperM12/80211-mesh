@@ -173,7 +173,8 @@ def visualize_network(nodes, edges_config, title="Topologia Sieci Mesh"):
     plt.axis('equal') # Zachowaj proporcje 1:1 metrów
     
     print("\nZamykam okno wykresu, aby zakończyć program.")
-    plt.show()
+    plt.savefig('wykres_topologii.png', bbox_inches='tight')
+    print("Zapisano wykres do pliku: wykres_topologii.png")
 
 
 def auto_generate_edges(nodes, max_range_meters=100):
@@ -233,14 +234,13 @@ if __name__ == "__main__":
     print(f"Wczytywanie węzłów z pliku: {config_file}...")
     
     try:
-        # Pobieramy węzły, ale ignorujemy krawędzie z jsona (używając znaku '_')
+        # Pobieramy węzły, ale ignorujemy krawędzie z jsona (używając znaku '_') - zaszla zmiana na automatycznie generowane lącza
         nodes, _ = load_topology_from_json(config_file)
     except FileNotFoundError:
         print(f"Błąd: Nie znaleziono pliku {config_file}!")
         exit()
         
-    # 2. AUTOMATYCZNE GENEROWANIE POŁĄCZEŃ
-    # Definiujemy fizyczny zasięg radia w metrach (np. 80 metrów)
+
     zasieg_wifi = 80
     print(f"Obliczanie zasięgu fizycznego urządzeń (max {zasieg_wifi}m)...")
     edges_config = auto_generate_edges(nodes, max_range_meters=zasieg_wifi)
