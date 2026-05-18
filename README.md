@@ -4,3 +4,5 @@ docker build -t mesh-simulator .
 
 Potem żeby uruchomić:
 docker run --rm -v ${PWD}:/app mesh-simulator
+
+W celu zmiany rozmieszczenia/topologi trzeba zmienić plik topology.json
