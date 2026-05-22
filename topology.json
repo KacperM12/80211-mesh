@@ -1,10 +1,10 @@
 {
   "nodes": [
-    {"id": "N1", "x": 0, "y": 100, "uplink_bw": 100},
-    {"id": "N2", "x": 50, "y": 100, "uplink_bw": 50},
-    {"id": "N3", "x": 80, "y": 40, "uplink_bw": 0},
-    {"id": "N4", "x": 0, "y": 0, "uplink_bw": 0},
-    {"id": "N5", "x": -30, "y": 60, "uplink_bw": 0}
+    {"id": "N1", "x": 30, "y": 0, "uplink_bw": 0},
+    {"id": "N2", "x": 30, "y": 50, "uplink_bw": 100},
+    {"id": "N3", "x": 30, "y": 100, "uplink_bw": 100},
+    {"id": "N4", "x": 0, "y": 50, "uplink_bw": 200},
+    {"id": "N5", "x": 60, "y": 50, "uplink_bw": 0}
   ]   
 }
 
