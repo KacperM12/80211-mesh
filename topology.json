@@ -1,10 +1,38 @@
 {
   "nodes": [
-    {"id": "N1", "x": 30, "y": 0, "uplink_bw": 0},
-    {"id": "N2", "x": 30, "y": 50, "uplink_bw": 100},
-    {"id": "N3", "x": 30, "y": 100, "uplink_bw": 100},
-    {"id": "N4", "x": 0, "y": 50, "uplink_bw": 200},
-    {"id": "N5", "x": 60, "y": 50, "uplink_bw": 0}
-  ]   
+    {
+      "id": "N1",
+      "x": 30,
+      "y": 15,
+      "uplink_bw": 100,
+      "c_tech": 10,
+      "ping_avg": 12.0,
+      "ping_mdev": 1.8,
+      "v_ruch": 5.0,
+      "b_wolne": 80.0,
+      "is_data_source": true
+    },
+    {
+      "id": "N2",
+      "x": 30,
+      "y": 50,
+      "uplink_bw": 5,
+      "c_tech": 100,
+      "ping_avg": 35.0,
+      "ping_mdev": 6.0,
+      "v_ruch": 5.0,
+      "b_wolne": 3.0,
+      "is_data_source": true
+    },
+    { "id": "N3", "x": 30, "y": 85, "uplink_bw": 0 },
+    { "id": "N4", "x": 0,  "y": 50, "uplink_bw": 0 },
+    { "id": "N5", "x": 60, "y": 50, "uplink_bw": 0 }
+  ],
+  "links": [
+    { "u": "N1", "v": "N2", "b_phy": 150, "u_eter": 0.10 },
+    { "u": "N2", "v": "N3", "b_phy": 60,  "u_eter": 0.25 },
+    { "u": "N2", "v": "N4", "b_phy": 40,  "u_eter": 0.35 },
+    { "u": "N2", "v": "N5", "b_phy": 40,  "u_eter": 0.30 },
+    { "u": "N4", "v": "N5", "b_phy": 20,  "u_eter": 0.50, "enabled": false }
+  ]
 }
-

@@ -1,0 +1,120 @@
+--- 1. WAGI ZEWNĘTRZNE (W_zew) - Ocena bramki wyjściowej (Gateway) ---
+Zamiast straty pakietów (Loss) wchodzimy w analizę samego opóźnienia i jego stabilności. Do tego odwracamy proporcję zajętości łącza.
+
+W_zew = K_baz + K_ping + K_jitter + K_zator
+
+Gdzie:
+
+    K_baz = C_tech
+    (Sztywna opłata za typ technologii, np. Kabel = 10, 5G = 100. Nie dzielimy już tego przez pasmo, zachowując samą wagę nośnika).
+
+    K_ping = a * Ping_avg
+    (Kara za średnie opóźnienie - wyłapie zjawisko bufferbloat).
+
+    K_jitter = b * Ping_mdev
+    (Kara za niestabilność opóźnienia. Parametr mdev, czyli odchylenie, wyciągnięty prosto z komendy ping).
+
+    K_zator = c * (V_ruch / B_wolne)
+    (V_ruch to szacowany wolumen ruchu z naszej sieci, a B_wolne to dostępna przepustowość bramki. Jeśli nasza sieć chce wysłać 5 Mbps, a wolnego na bramce jest tylko 6 Mbps, ułamek daje wysoką wartość i drastycznie podnosi koszt bramki).
+
+Zmienne 'a', 'b', 'c' to wagi (skalary) pozwalające kalibrować czułość algorytmu.
+
+--- 2. WAGI WEWNĘTRZNE (W_wew) - Tranzyt wewnątrz sieci Mesh ---
+Tutaj głównym celem jest promowanie węzłów centralnych, żeby minimalizować liczbę skoków (hopów), o co Pan słusznie pytał na schemacie gwiazdy.
+
+W_wew = K_skok + K_link + K_eter
+
+Gdzie każda pojedyncza krawędź między urządzeniami wewnątrz sieci jest oceniana tak:
+
+    K_skok = C_hop
+    (Sztywny "podatek od skoku", np. 100. Dzięki temu trasa przez 1 centralny węzeł dostanie na starcie koszt 100 i zawsze wygra z trasą dookoła przez 3 węzły poboczne, która dostanie koszt 300).
+
+    K_link = C_wifi / B_phy
+    (Kara za powolny link fizyczny. Znamy przepływności z negocjacji kart sieciowych. Ten parametr pozwala rozstrzygnąć remis, gdy mamy do wyboru dwie różne trasy o tej samej liczbie skoków).
+
+    K_eter = d * U_eter
+    (Kara za zaszumienie eteru. U_eter planuję wyciągnąć ze sprzętowego wskaźnika CCA karty sieciowej, badając prosty stosunek 'busy time' do 'active time' z poziomu systemu Linuksa).
+
+--- 3. DECYZJA (Koszt całkowity trasy) ---
+Gdy węzeł szuka drogi na zewnątrz, algorytm sumuje koszty:
+Koszt Calkowity = (Suma wszystkich W_wew po drodze do bramki) + (W_zew wybranej bramki).
+
+Dzięki temu liczba skoków (K_skok) staje się głównym fundamentem budującym topologię, a parametry jakościowe i telemetria na bieżąco korygują trasę, pozwalając ominąć awarie i zapchane łącza.
+
+Gdzie w docelowej implemetacji można zdobyć metryki/jak je zdobyć?
+
+SPOSÓB POZYSKIWANIA METRYK W DOCELOWEJ IMPLEMENTACJI
+
+    METRYKI ZEWNĘTRZNE (Wyliczane przez bramkę / Gateway)
+
+Opóźnienie i Jitter (Ping_avg oraz Ping_mdev)
+
+    Metoda: Aktywne sondowanie (Active Probing).
+
+    Implementacja: Skrypt w tle uruchamia standardowe polecenie systemowe:
+    ping -c 5 8.8.8.8
+    (wysyła to serię 5 pakietów ICMP do stabilnego serwera w internecie).
+
+    Ekstrakcja danych: System zwraca podsumowanie w postaci tekstowej, na przykład:
+    rtt min/avg/max/mdev = 10.1/15.3/20.5/2.5 ms
+
+    Przypisanie: Skrypt wycina z tekstu wartość średnią (15.3) i przypisuje do zmiennej Ping_avg, a odchylenie (2.5) przypisuje do zmiennej Ping_mdev.
+
+Wolumen generowanego ruchu (V_ruch)
+
+    Metoda: Parametr konfiguracyjny lub pasywne zliczanie.
+
+    Implementacja Opcja A (Zalecana dla IoT): Wartość jest wpisana na sztywno do konfiguracji skryptu (np. 5 Mbps), ponieważ sieć czujników generuje stały i przewidywalny ruch.
+
+    Implementacja Opcja B (Dynamiczna): Odczyt wirtualnego pliku jądra Linuksa /proc/net/dev, który sumuje wysłane bajty na danym interfejsie sieciowym (np. eth0 lub wwan0). Skrypt sprawdza różnicę (deltę) liczby bajtów w odstępie 5 sekund i przelicza to na aktualny ruch w Mbps.
+
+Dostępna przepustowość (B_wolne)
+
+    Metoda: Rozpraszanie pociągu pakietów (Packet Train Dispersion).
+
+    Implementacja: Bramka wysyła krótką serię kilkunastu bardzo lekkich pakietów UDP do serwera docelowego w internecie. Pakiety są nadawane w minimalnych, stałych odstępach czasu.
+
+    Ekstrakcja danych: Serwer docelowy mierzy różnice w czasie dotarcia poszczególnych pakietów (ich rozjechanie się w czasie z powodu ograniczeń łącza LTE/5G). Na podstawie tego rozproszenia serwer matematycznie wylicza dostępne wolne pasmo i odsyła tę jedną liczbę z powrotem do bramki pod zmienną B_wolne. Zapobiega to potrzebie robienia ciężkich speedtestów.
+
+    METRYKI WEWNĘTRZNE (Wyliczane na krawędziach sieci Mesh)
+
+Prędkość fizyczna łącza (B_phy)
+
+    Metoda: Odpytanie sterownika karty sieciowej (mac80211).
+
+    Implementacja: Skrypt systemowy wykonuje polecenie:
+    iw dev wlan0 station dump
+
+    Ekstrakcja danych: System zwraca tekstową listę wszystkich połączonych sąsiadów radiowych. Dla każdego adresu MAC podawane są aktualne parametry połączenia. Skrypt parsuje wartość z linijki "tx bitrate" (np. tx bitrate: 150.0 MBit/s) i zapisuje ją pod zmienną B_phy dla danego połączenia.
+
+Zajętość eteru (U_eter)
+
+    Metoda: Analiza sprzętowych liczników nasłuchu CCA (Clear Channel Assessment).
+
+    Implementacja: Skrypt wykonuje polecenie:
+    iw dev wlan0 survey dump
+
+    Ekstrakcja danych: Komenda zwraca surowe statystyki karty radiowej w milisekundach, z których najważniejsze to "active time" (całkowity czas działania radia) oraz "busy time" (czas, gdy radio wykryło, że kanał jest zajęty przez obcy ruch lub zaszumienie).
+
+    Obliczenia: Skrypt pobiera te dane, odczekuje kilka sekund i pobiera je ponownie. Wzór na zajętość to:
+    U_eter = (busy_time_now - busy_time_past) / (active_time_now - active_time_past)
+    Wynik to ułamek od 0.0 do 1.0 (np. 0.35 oznacza 35% zapchania eteru wokół tego routera).
+
+Kara za skok (K_skok)
+
+    Metoda: Deklaracja statyczna w kodzie.
+
+    Implementacja: Jest to stała wartość liczbowa (np. 100) doliczana automatycznie przez algorytm za każdy kolejny przeskoczony router na trasie, co wymusza preferowanie topologii gwiazdy i węzłów centralnych.
+
+    ARCHITEKTURA I URUCHAMIANIE (Polling Helper)
+
+Wszystkie powyższe procedury będą zaszyte w jednym skrypcie pomocniczym (np. w Pythonie lub Bashu) działającym jako demon w tle systemu OpenWrt.
+
+Skrypt będzie działał w pętli czasowej (tzw. Polling) wybudzanej co 5 lub 10 sekund. Po każdym wybudzeniu skrypt:
+
+    Wykonuje komendy systemowe (ping, iw dev, proc/net/dev).
+
+    Podstawia liczby do wzorów na wagi W_zew oraz W_wew.
+
+    Aktualizuje wartości wag bezpośrednio w tabeli lokalnego protokołu routingu (np. Babeld).
+    Odstęp 5-10 sekund gwarantuje, że procesor routera nie zostanie przeciążony, a sieć zachowa wysoką responsywność na zmiany warunków.

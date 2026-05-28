@@ -1,0 +1,60 @@
+--- WAGI ZEWNĘTRZNE (W_zew) - wybór gatewaya ---
+Zależy nam na preferowaniu kabla, niskich opóźnieniach i niezapychaniu łącz. Wymyśliłem 3 komponenty:
+
+    Komponent bazowy (K_baz) - z góry promuje lepsze technologie (np. światłowód nad LTE):
+    K_baz = C_tech / B_max
+    Gdzie:
+
+    C_tech to stała uwarunkowana technologią (np. niska wartość dla kabla, wysoka dla sieci komórkowej, żeby z góry faworyzować kabel).
+
+    B_max to przepustowość maksymalna danego złącza (w Mbps).
+
+    Parametr telemetryczny (K_jak) - ocenia bieżącą jakość łącza:
+    K_jak = (a * Ping) + (b * Loss)
+    Gdzie:
+
+    Ping to opóźnienie w milisekundach.
+
+    Loss to odsetek utraconych pakietów.
+
+    'a' oraz 'b' to nasze zmienne/skalary, dzięki którym możemy dostrajać czułość algorytmu (np. jeśli bardziej zależy nam na braku strat niż na niskim pingu).
+
+    Mnożnik wolnego pasma (M_wolne) - chroni złącze przed zapchaniem:
+    M_wolne = B_max / B_wolne
+    Gdzie:
+
+    B_wolne to aktualnie niewykorzystana przepustowość łącza w Mbps.
+    Działa to asymptotycznie - im mniej wolnych megabitów (B_wolne), tym mnożnik drastycznie szybciej rośnie, co działa jak naturalny load balancer odpychający ruch od zapchanej bramki.
+
+Ostateczny wzór:
+W_zew = (K_baz + K_jak) * M_wolne
+
+Uwagi do wdrożenia: W kodzie dodam zabezpieczenie przed dzieleniem przez zero (gdy B_wolne = 0) oraz wygładzanie np. średnią kroczącą (EWMA), żeby zapobiec ciągłemu przełączaniu tras (route flapping).
+
+--- WAGI WEWNĘTRZNE (W_wew) - tranzyt radiowy w Mesh ---
+W Wi-Fi zjawiska negatywne się potęgują, więc zamiast dodawania, użyłem mnożenia.
+
+    Koszt fizyczny (K_mod):
+    K_mod = C_wifi / B_phy
+    Gdzie:
+
+    C_wifi to stała kara za samo używanie medium współdzielonego (radia).
+
+    B_phy to wynegocjowana z sąsiadem fizyczna przepustowość linku (PHY Rate) w Mbps. Zamiast patrzeć na metry, patrzymy na to, jak szybko routery mogą ze sobą rozmawiać.
+
+    Kary za błędy (ETX - Expected Transmission Count):
+    ETX = 1 / (1 - P_loss)
+    Gdzie:
+
+    P_loss to prawdopodobieństwo utraty pakietu na tym konkretnym linku radiowym (uwzględnia konieczność retransmisji, która zapycha eter).
+
+    Zajętość eteru (M_eter):
+    M_eter = 1 / (1 - U_eter)
+    Gdzie:
+
+    U_eter to procentowa utylizacja (zajętość) danego kanału Wi-Fi przez inne urządzenia w okolicy.
+
+Ostateczny wzór:
+W_wew = K_mod * ETX * M_eter
+
+Uwagi do wdrożenia: Ponieważ to mnożenie, przy dużych zakłóceniach wynik może być problem z licznikiem (integer overflow) w protokole routingu. Planuję nałożyć twardy limit - np. jeśli W_wew przekroczy 65000, to krawędź dostaje status "unreachable".
